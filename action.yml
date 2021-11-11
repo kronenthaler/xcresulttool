@@ -11,6 +11,10 @@ inputs:
   title:
     description: 'Title for the check results'
     default: 'Xcode test results'
+  failuresOnly:
+    default: false
+  skipUpload:
+    default: false
 runs:
   using: 'node12'
   main: 'dist/index.js'

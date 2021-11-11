@@ -91,200 +91,6 @@ exports.exportAttachments = exportAttachments;
 
 /***/ }),
 
-/***/ 5730:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/*eslint-disable
-no-empty,
-no-shadow,
-github/array-foreach,
-@typescript-eslint/explicit-function-return-type,
-@typescript-eslint/explicit-member-accessibility,
-@typescript-eslint/no-explicit-any,
-@typescript-eslint/no-extraneous-class,
-@typescript-eslint/no-unused-vars,
-@typescript-eslint/prefer-includes,
-*/
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Convert = void 0;
-// Converts JSON strings to/from your types
-// and asserts the results of JSON.parse at runtime
-class Convert {
-    static toCodeCoverage(json) {
-        return cast(JSON.parse(json), r('CodeCoverage'));
-    }
-    static codeCoverageToJson(value) {
-        return JSON.stringify(uncast(value, r('CodeCoverage')), null, 2);
-    }
-}
-exports.Convert = Convert;
-function invalidValue(typ, val, key = '') {
-    if (key) {
-        throw Error(`Invalid value for key "${key}". Expected type ${JSON.stringify(typ)} but got ${JSON.stringify(val)}`);
-    }
-    throw Error(`Invalid value ${JSON.stringify(val)} for type ${JSON.stringify(typ)}`);
-}
-function jsonToJSProps(typ) {
-    if (typ.jsonToJS === undefined) {
-        const map = {};
-        typ.props.forEach((p) => (map[p.json] = { key: p.js, typ: p.typ }));
-        typ.jsonToJS = map;
-    }
-    return typ.jsonToJS;
-}
-function jsToJSONProps(typ) {
-    if (typ.jsToJSON === undefined) {
-        const map = {};
-        typ.props.forEach((p) => (map[p.js] = { key: p.json, typ: p.typ }));
-        typ.jsToJSON = map;
-    }
-    return typ.jsToJSON;
-}
-function transform(val, typ, getProps, key = '') {
-    function transformPrimitive(typ, val) {
-        if (typeof typ === typeof val)
-            return val;
-        return invalidValue(typ, val, key);
-    }
-    function transformUnion(typs, val) {
-        // val must validate against one typ in typs
-        const l = typs.length;
-        for (let i = 0; i < l; i++) {
-            const typ = typs[i];
-            try {
-                return transform(val, typ, getProps);
-            }
-            catch (_) { }
-        }
-        return invalidValue(typs, val);
-    }
-    function transformEnum(cases, val) {
-        if (cases.indexOf(val) !== -1)
-            return val;
-        return invalidValue(cases, val);
-    }
-    function transformArray(typ, val) {
-        // val must be an array with no invalid elements
-        if (!Array.isArray(val))
-            return invalidValue('array', val);
-        return val.map(el => transform(el, typ, getProps));
-    }
-    function transformDate(val) {
-        if (val === null) {
-            return null;
-        }
-        const d = new Date(val);
-        if (isNaN(d.valueOf())) {
-            return invalidValue('Date', val);
-        }
-        return d;
-    }
-    function transformObject(props, additional, val) {
-        if (val === null || typeof val !== 'object' || Array.isArray(val)) {
-            return invalidValue('object', val);
-        }
-        const result = {};
-        Object.getOwnPropertyNames(props).forEach(key => {
-            const prop = props[key];
-            const v = Object.prototype.hasOwnProperty.call(val, key)
-                ? val[key]
-                : undefined;
-            result[prop.key] = transform(v, prop.typ, getProps, prop.key);
-        });
-        Object.getOwnPropertyNames(val).forEach(key => {
-            if (!Object.prototype.hasOwnProperty.call(props, key)) {
-                result[key] = transform(val[key], additional, getProps, key);
-            }
-        });
-        return result;
-    }
-    if (typ === 'any')
-        return val;
-    if (typ === null) {
-        if (val === null)
-            return val;
-        return invalidValue(typ, val);
-    }
-    if (typ === false)
-        return invalidValue(typ, val);
-    while (typeof typ === 'object' && typ.ref !== undefined) {
-        typ = typeMap[typ.ref];
-    }
-    if (Array.isArray(typ))
-        return transformEnum(typ, val);
-    if (typeof typ === 'object') {
-        return typ.hasOwnProperty('unionMembers')
-            ? transformUnion(typ.unionMembers, val)
-            : typ.hasOwnProperty('arrayItems')
-                ? transformArray(typ.arrayItems, val)
-                : typ.hasOwnProperty('props')
-                    ? transformObject(getProps(typ), typ.additional, val)
-                    : invalidValue(typ, val);
-    }
-    // Numbers can be parsed by Date but shouldn't be.
-    if (typ === Date && typeof val !== 'number')
-        return transformDate(val);
-    return transformPrimitive(typ, val);
-}
-function cast(val, typ) {
-    return transform(val, typ, jsonToJSProps);
-}
-function uncast(val, typ) {
-    return transform(val, typ, jsToJSONProps);
-}
-function a(typ) {
-    return { arrayItems: typ };
-}
-function u(...typs) {
-    return { unionMembers: typs };
-}
-function o(props, additional) {
-    return { props, additional };
-}
-function m(additional) {
-    return { props: [], additional };
-}
-function r(name) {
-    return { ref: name };
-}
-const typeMap = {
-    CodeCoverage: o([
-        { json: 'coveredLines', js: 'coveredLines', typ: 0 },
-        { json: 'lineCoverage', js: 'lineCoverage', typ: 3.14 },
-        { json: 'targets', js: 'targets', typ: a(r('Target')) },
-        { json: 'executableLines', js: 'executableLines', typ: 0 }
-    ], false),
-    Target: o([
-        { json: 'coveredLines', js: 'coveredLines', typ: 0 },
-        { json: 'lineCoverage', js: 'lineCoverage', typ: 3.14 },
-        { json: 'files', js: 'files', typ: a(r('File')) },
-        { json: 'name', js: 'name', typ: '' },
-        { json: 'executableLines', js: 'executableLines', typ: 0 },
-        { json: 'buildProductPath', js: 'buildProductPath', typ: '' }
-    ], false),
-    File: o([
-        { json: 'coveredLines', js: 'coveredLines', typ: 0 },
-        { json: 'lineCoverage', js: 'lineCoverage', typ: 3.14 },
-        { json: 'path', js: 'path', typ: '' },
-        { json: 'functions', js: 'functions', typ: a(r('Function')) },
-        { json: 'name', js: 'name', typ: '' },
-        { json: 'executableLines', js: 'executableLines', typ: 0 }
-    ], false),
-    Function: o([
-        { json: 'coveredLines', js: 'coveredLines', typ: 0 },
-        { json: 'lineCoverage', js: 'lineCoverage', typ: 3.14 },
-        { json: 'lineNumber', js: 'lineNumber', typ: 0 },
-        { json: 'executionCount', js: 'executionCount', typ: 0 },
-        { json: 'name', js: 'name', typ: '' },
-        { json: 'executableLines', js: 'executableLines', typ: 0 }
-    ], false)
-};
-
-
-/***/ }),
-
 /***/ 7556:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -322,11 +128,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Formatter = void 0;
 const Image = __importStar(__nccwpck_require__(1281));
-const github = __importStar(__nccwpck_require__(5438));
 const path = __importStar(__nccwpck_require__(5622));
+const core = __importStar(__nccwpck_require__(2186));
 const report_1 = __nccwpck_require__(8269);
 const markdown_1 = __nccwpck_require__(5821);
-const coverage_1 = __nccwpck_require__(5730);
 const parser_1 = __nccwpck_require__(267);
 const attachment_1 = __nccwpck_require__(2985);
 const passedIcon = Image.testStatus('Success');
@@ -344,7 +149,7 @@ class Formatter {
         this.bundlePath = bundlePath;
         this.parser = new parser_1.Parser(this.bundlePath);
     }
-    format() {
+    format(failuresOnly = false) {
         var _a;
         return __awaiter(this, void 0, void 0, function* () {
             const actionsInvocationRecord = yield this.parser.parse();
@@ -356,30 +161,19 @@ class Formatter {
             }
             if (actionsInvocationRecord.actions) {
                 for (const action of actionsInvocationRecord.actions) {
-                    if (action.actionResult) {
-                        if (action.actionResult.testsRef) {
-                            const testReportChapter = new report_1.TestReportChapter(action.schemeCommandName, action.runDestination, action.title);
-                            testReport.chapters.push(testReportChapter);
-                            const actionTestPlanRunSummaries = yield this.parser.parse(action.actionResult.testsRef.id);
-                            for (const summary of actionTestPlanRunSummaries.summaries) {
-                                for (const testableSummary of summary.testableSummaries) {
-                                    const testSummaries = [];
-                                    yield this.collectTestSummaries(testableSummary, testableSummary.tests, testSummaries);
-                                    if (testableSummary.name) {
-                                        testReportChapter.sections[testableSummary.name] =
-                                            new report_1.TestReportSection(testableSummary, testSummaries);
-                                    }
-                                }
-                            }
-                            if (action.actionResult.coverage) {
-                                try {
-                                    const codeCoverage = coverage_1.Convert.toCodeCoverage(yield this.parser.exportCodeCoverage());
-                                    const testCodeCoverage = new report_1.TestCodeCoverage(codeCoverage);
-                                    testReport.codeCoverage = testCodeCoverage;
-                                }
-                                catch (error) {
-                                    // no-op
-                                }
+                    if (!action.actionResult || !action.actionResult.testsRef) {
+                        continue;
+                    }
+                    const testReportChapter = new report_1.TestReportChapter(action.schemeCommandName, action.runDestination, action.title);
+                    testReport.chapters.push(testReportChapter);
+                    const actionTestPlanRunSummaries = yield this.parser.parse(action.actionResult.testsRef.id);
+                    for (const summary of actionTestPlanRunSummaries.summaries) {
+                        for (const testableSummary of summary.testableSummaries) {
+                            const testSummaries = [];
+                            yield this.collectTestSummaries(testableSummary, testableSummary.tests, testSummaries);
+                            if (testableSummary.name) {
+                                testReportChapter.sections[testableSummary.name] =
+                                    new report_1.TestReportSection(testableSummary, testSummaries);
                             }
                         }
                     }
@@ -457,7 +251,7 @@ class Formatter {
                     groups[identifier] = group;
                 }
                 chapterSummary.content.push('### Summary');
-                chapterSummary.content.push('<table>');
+                chapterSummary.content.push('<table id="summary">');
                 chapterSummary.content.push('<tr>');
                 const header = [
                     `<th>Total`,
@@ -494,52 +288,54 @@ class Formatter {
                 else if (testSummary.stats.passed > 0) {
                     testReport.testStatus = 'success';
                 }
-                chapterSummary.content.push('### Test Summary');
-                for (const [groupIdentifier, group] of Object.entries(testSummary.groups)) {
-                    const anchorName = (0, markdown_1.anchorIdentifier)(groupIdentifier);
-                    const anchorTag = (0, markdown_1.anchorNameTag)(`${groupIdentifier}_summary`);
-                    chapterSummary.content.push(`#### ${anchorTag}[${groupIdentifier}](${anchorName})\n`);
-                    const runDestination = chapter.runDestination;
-                    chapterSummary.content.push(`- **Device:** ${runDestination.targetDeviceRecord.modelName}, ${runDestination.targetDeviceRecord.operatingSystemVersionWithBuildNumber}`);
-                    chapterSummary.content.push(`- **SDK:** ${runDestination.targetSDKRecord.name}, ${runDestination.targetSDKRecord.operatingSystemVersion}`);
-                    chapterSummary.content.push('<table>');
-                    chapterSummary.content.push('<tr>');
-                    const header = [
-                        `<th>Test`,
-                        `<th>Total`,
-                        `<th>${passedIcon}`,
-                        `<th>${failedIcon}`,
-                        `<th>${skippedIcon}`,
-                        `<th>${expectedFailureIcon}`
-                    ].join('');
-                    chapterSummary.content.push(header);
-                    for (const [identifier, stats] of Object.entries(group)) {
+                if (!failuresOnly) {
+                    chapterSummary.content.push('### Test Summary');
+                    for (const [groupIdentifier, group] of Object.entries(testSummary.groups)) {
+                        const anchorName = (0, markdown_1.anchorIdentifier)(groupIdentifier);
+                        const anchorTag = (0, markdown_1.anchorNameTag)(`${groupIdentifier}_summary`);
+                        chapterSummary.content.push(`#### ${anchorTag}[${groupIdentifier}](${anchorName})\n`);
+                        const runDestination = chapter.runDestination;
+                        chapterSummary.content.push(`- **Device:** ${runDestination.targetDeviceRecord.modelName}, ${runDestination.targetDeviceRecord.operatingSystemVersionWithBuildNumber}`);
+                        chapterSummary.content.push(`- **SDK:** ${runDestination.targetSDKRecord.name}, ${runDestination.targetSDKRecord.operatingSystemVersion}`);
+                        chapterSummary.content.push('<table id="test-table-summary">');
                         chapterSummary.content.push('<tr>');
-                        const testClass = `${testClassIcon}&nbsp;${identifier}`;
-                        const testClassAnchor = (0, markdown_1.anchorNameTag)(`${groupIdentifier}_${identifier}_summary`);
-                        const anchorName = (0, markdown_1.anchorIdentifier)(`${groupIdentifier}_${identifier}`);
-                        const testClassLink = `<a href="${anchorName}">${testClass}</a>`;
-                        let failedCount;
-                        if (stats.failed > 0) {
-                            failedCount = `<b>${stats.failed}</b>`;
-                        }
-                        else {
-                            failedCount = `${stats.failed}`;
-                        }
-                        const cols = [
-                            `<td align="left" width="368px">${testClassAnchor}${testClassLink}`,
-                            `<td align="right" width="80px">${stats.total}`,
-                            `<td align="right" width="80px">${stats.passed}`,
-                            `<td align="right" width="80px">${failedCount}`,
-                            `<td align="right" width="80px">${stats.skipped}`,
-                            `<td align="right" width="80px">${stats.expectedFailure}`
+                        const header = [
+                            `<th>Test`,
+                            `<th>Total`,
+                            `<th>${passedIcon}`,
+                            `<th>${failedIcon}`,
+                            `<th>${skippedIcon}`,
+                            `<th>${expectedFailureIcon}`
                         ].join('');
-                        chapterSummary.content.push(cols);
+                        chapterSummary.content.push(header);
+                        for (const [identifier, stats] of Object.entries(group)) {
+                            chapterSummary.content.push('<tr>');
+                            const testClass = `${testClassIcon}&nbsp;${identifier}`;
+                            const testClassAnchor = (0, markdown_1.anchorNameTag)(`${groupIdentifier}_${identifier}_summary`);
+                            const anchorName = (0, markdown_1.anchorIdentifier)(`${groupIdentifier}_${identifier}`);
+                            const testClassLink = `<a href="${anchorName}">${testClass}</a>`;
+                            let failedCount;
+                            if (stats.failed > 0) {
+                                failedCount = `<b>${stats.failed}</b>`;
+                            }
+                            else {
+                                failedCount = `${stats.failed}`;
+                            }
+                            const cols = [
+                                `<td align="left" width="368px">${testClassAnchor}${testClassLink}`,
+                                `<td align="right" width="80px">${stats.total}`,
+                                `<td align="right" width="80px">${stats.passed}`,
+                                `<td align="right" width="80px">${failedCount}`,
+                                `<td align="right" width="80px">${stats.skipped}`,
+                                `<td align="right" width="80px">${stats.expectedFailure}`
+                            ].join('');
+                            chapterSummary.content.push(cols);
+                        }
+                        chapterSummary.content.push('');
+                        chapterSummary.content.push('</table>\n');
                     }
-                    chapterSummary.content.push('');
-                    chapterSummary.content.push('</table>\n');
+                    chapterSummary.content.push('---\n');
                 }
-                chapterSummary.content.push('---\n');
                 const testFailures = new report_1.TestFailures();
                 const annotations = [];
                 for (const [, results] of Object.entries(chapter.sections)) {
@@ -623,19 +419,7 @@ class Formatter {
                     chapterSummary.content.push('');
                 }
                 else {
-                    chapterSummary.content.push(`All tests passed :tada:\n`);
-                }
-                if (testReport.codeCoverage) {
-                    const workspace = path.dirname(`${testReport.creatingWorkspaceFilePath}`);
-                    chapterSummary.content.push('---\n');
-                    const re = new RegExp(`${workspace}/`, 'g');
-                    let root = '';
-                    if (process.env.GITHUB_REPOSITORY) {
-                        const pr = github.context.payload.pull_request;
-                        const sha = (pr && pr.head.sha) || github.context.sha;
-                        root = `${github.context.serverUrl}/${github.context.repo.owner}/${github.context.repo.repo}/blob/${sha}/`;
-                    }
-                    chapterSummary.content.push(testReport.codeCoverage.lines.join('\n').replace(re, root));
+                    chapterSummary.content.push(`All tests passed :tada:`);
                 }
                 const testDetails = new report_1.TestDetails();
                 for (const [, results] of Object.entries(chapter.sections)) {
@@ -698,38 +482,40 @@ class Formatter {
                         const anchorTag = (0, markdown_1.anchorNameTag)(`${testResultSummaryName}_${groupIdentifier}`);
                         const anchorName = (0, markdown_1.anchorIdentifier)(`${testResultSummaryName}_${groupIdentifier}_summary`);
                         const anchorBack = `[${backIcon}](${anchorName})`;
-                        testDetail.lines.push(`${anchorTag}<h5>${testName}&nbsp;${anchorBack}</h5>`);
-                        const testsStatsLines = [];
-                        testsStatsLines.push('<table>');
-                        testsStatsLines.push('<tr>');
-                        const header = [
-                            `<th>${passedIcon}`,
-                            `<th>${failedIcon}`,
-                            `<th>${skippedIcon}`,
-                            `<th>${expectedFailureIcon}`,
-                            `<th>:stopwatch:`
-                        ].join('');
-                        testsStatsLines.push(header);
-                        testsStatsLines.push('<tr>');
-                        let failedCount;
-                        if (failed > 0) {
-                            failedCount = `<b>${failed} (${failedRate}%)</b>`;
+                        if ((failed > 0 && failuresOnly) || !failuresOnly) {
+                            testDetail.lines.push(`${anchorTag}<h5>${testName}&nbsp;${anchorBack}</h5>`);
+                            const testsStatsLines = [];
+                            testsStatsLines.push('<table id="test-summary-table">');
+                            testsStatsLines.push('<tr>');
+                            const header = [
+                                `<th>${passedIcon}`,
+                                `<th>${failedIcon}`,
+                                `<th>${skippedIcon}`,
+                                `<th>${expectedFailureIcon}`,
+                                `<th>:stopwatch:`
+                            ].join('');
+                            testsStatsLines.push(header);
+                            testsStatsLines.push('<tr>');
+                            let failedCount;
+                            if (failed > 0) {
+                                failedCount = `<b>${failed} (${failedRate}%)</b>`;
+                            }
+                            else {
+                                failedCount = `${failed} (${failedRate}%)`;
+                            }
+                            const cols = [
+                                `<td align="right" width="154px">${passed} (${passedRate}%)`,
+                                `<td align="right" width="154px">${failedCount}`,
+                                `<td align="right" width="154px">${skipped} (${skippedRate}%)`,
+                                `<td align="right" width="154px">${expectedFailure} (${expectedFailureRate}%)`,
+                                `<td align="right" width="154px">${testDuration}s`
+                            ].join('');
+                            testsStatsLines.push(cols);
+                            testsStatsLines.push('</table>\n');
+                            testDetail.lines.push(testsStatsLines.join('\n'));
                         }
-                        else {
-                            failedCount = `${failed} (${failedRate}%)`;
-                        }
-                        const cols = [
-                            `<td align="right" width="154px">${passed} (${passedRate}%)`,
-                            `<td align="right" width="154px">${failedCount}`,
-                            `<td align="right" width="154px">${skipped} (${skippedRate}%)`,
-                            `<td align="right" width="154px">${expectedFailure} (${expectedFailureRate}%)`,
-                            `<td align="right" width="154px">${testDuration}s`
-                        ].join('');
-                        testsStatsLines.push(cols);
-                        testsStatsLines.push('</table>\n');
-                        testDetail.lines.push(testsStatsLines.join('\n'));
                         const testDetailTable = [];
-                        testDetailTable.push(`<table>`);
+                        testDetailTable.push(`<table id="details">`);
                         const configurationGroup = details.reduce((groups, detail) => {
                             if (detail.identifier) {
                                 if (groups[detail.identifier]) {
@@ -780,6 +566,9 @@ class Formatter {
                             const groupStatusImage = Image.testStatus(groupStatus);
                             for (const [index, detail] of details.entries()) {
                                 const testResult = detail;
+                                if (failuresOnly && testResult.testStatus !== 'Failure') {
+                                    continue;
+                                }
                                 const rowSpan = `rowspan="${details.length}"`;
                                 const valign = `valign="top"`;
                                 const colWidth = 'width="52px"';
@@ -918,9 +707,15 @@ class Formatter {
                                 testDetailTable.push(testResultRow);
                             }
                         }
-                        testDetailTable.push(`</table>`);
-                        testDetailTable.push('');
+                        if (failuresOnly && testDetailTable.length == 1) {
+                            testDetailTable.pop();
+                        }
+                        else {
+                            testDetailTable.push(`</table>`);
+                            testDetailTable.push('');
+                        }
                         testDetail.lines.push(testDetailTable.join('\n'));
+                        core.debug(testDetailTable.join('\n'));
                     }
                 }
                 const chapterDetail = new report_1.TestReportChapterDetail();
@@ -984,7 +779,7 @@ function collectFailureSummaries(failureSummaries) {
         const titleWidth = 'width="100px"';
         const titleAttr = `${titleAlign} ${titleWidth}`;
         const detailWidth = 'width="668px"';
-        const contents = '<table>' +
+        const contents = '<table id="detail-table">' +
             `<tr><td ${titleAttr}><b>File</b><td ${detailWidth}>${fileLocation}` +
             `<tr><td ${titleAttr}><b>Issue Type</b><td ${detailWidth}>${failureSummary.issueType}` +
             `<tr><td ${titleAttr}><b>Message</b><td ${detailWidth}>${failureSummary.message}` +
@@ -1041,7 +836,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.icon = exports.testStatus = void 0;
 const path = __importStar(__nccwpck_require__(5622));
-const baseUrl = 'https://xcresulttool-static.netlify.app/i/';
+const baseUrl = 'https://xcresulttool-static.netlify.app/images/';
 const attrs = 'width="14px" align="top"';
 function testStatus(statusText) {
     let filename = '';
@@ -1129,9 +924,6 @@ function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const inputPath = core.getInput('path');
-            if (!inputPath) {
-                throw new Error('Failed to find the path to the input xcresult file.');
-            }
             const paths = inputPath.split('\n');
             const existPaths = [];
             for (const checkPath of paths) {
@@ -1152,7 +944,7 @@ function run() {
                 bundlePath = inputPath;
             }
             const formatter = new formatter_1.Formatter(bundlePath);
-            const report = yield formatter.format();
+            const report = yield formatter.format(core.getInput('failuresOnly') === 'true');
             if (core.getInput('token')) {
                 const octokit = new action_1.Octokit();
                 const owner = github.context.repo.owner;
@@ -1167,16 +959,16 @@ function run() {
                 }
                 let reportSummary = report.reportSummary;
                 if (reportSummary.length > charactersLimit) {
-                    core.error(`The 'summary' will be truncated because the character limit (${charactersLimit}) exceeded.`);
+                    core.warning(`The 'summary' will be truncated because the character limit (${charactersLimit}) exceeded.`);
                     reportSummary = reportSummary.substring(0, charactersLimit);
                 }
                 let reportDetail = report.reportDetail;
                 if (reportDetail.length > charactersLimit) {
-                    core.error(`The 'text' will be truncated because the character limit (${charactersLimit}) exceeded.`);
+                    core.warning(`The 'text' will be truncated because the character limit (${charactersLimit}) exceeded.`);
                     reportDetail = reportDetail.substring(0, charactersLimit);
                 }
                 if (report.annotations.length > 50) {
-                    core.error('Annotations that exceed the limit (50) will be truncated.');
+                    core.warning('Annotations that exceed the limit (50) will be truncated.');
                 }
                 const annotations = report.annotations.slice(0, 50);
                 yield octokit.checks.create({
@@ -1193,27 +985,29 @@ function run() {
                         annotations
                     }
                 });
-                for (const uploadBundlePath of paths) {
-                    try {
-                        yield stat(uploadBundlePath);
-                    }
-                    catch (error) {
-                        continue;
-                    }
-                    const artifactClient = artifact.create();
-                    const artifactName = path.basename(uploadBundlePath);
-                    const rootDirectory = uploadBundlePath;
-                    const options = {
-                        continueOnError: false
-                    };
-                    (0, glob_1.glob)(`${uploadBundlePath}/**/*`, (error, files) => __awaiter(this, void 0, void 0, function* () {
-                        if (error) {
-                            core.error(error);
+                if (core.getInput('skipUpload') !== 'true') {
+                    for (const uploadBundlePath of paths) {
+                        try {
+                            yield stat(uploadBundlePath);
                         }
-                        if (files.length) {
-                            yield artifactClient.uploadArtifact(artifactName, files, rootDirectory, options);
+                        catch (error) {
+                            continue;
                         }
-                    }));
+                        const artifactClient = artifact.create();
+                        const artifactName = path.basename(uploadBundlePath);
+                        const rootDirectory = uploadBundlePath;
+                        const options = {
+                            continueOnError: false
+                        };
+                        (0, glob_1.glob)(`${uploadBundlePath}/**/*`, (error, files) => __awaiter(this, void 0, void 0, function* () {
+                            if (error) {
+                                core.error(error);
+                            }
+                            if (files.length) {
+                                yield artifactClient.uploadArtifact(artifactName, files, rootDirectory, options);
+                            }
+                        }));
+                    }
                 }
             }
         }
@@ -1336,22 +1130,6 @@ class Parser {
             return Buffer.from(yield readFile(outputPath));
         });
     }
-    exportCodeCoverage() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const args = ['xccov', 'view', '--report', '--json', this.bundlePath];
-            let output = '';
-            const options = {
-                silent: true,
-                listeners: {
-                    stdout: (data) => {
-                        output += data.toString();
-                    }
-                }
-            };
-            yield exec.exec('xcrun', args, options);
-            return output;
-        });
-    }
     toJSON(reference) {
         return __awaiter(this, void 0, void 0, function* () {
             const args = [
@@ -1442,7 +1220,7 @@ function parsePrimitive(element) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Annotation = exports.TestCodeCoverage = exports.TestFailure = exports.TestFailureGroup = exports.TestFailures = exports.TestDetail = exports.TestDetails = exports.TestReportSection = exports.TestReportChapterDetail = exports.TestReportChapterSummary = exports.TestReportChapter = exports.TestReport = void 0;
+exports.Annotation = exports.TestFailure = exports.TestFailureGroup = exports.TestFailures = exports.TestDetail = exports.TestDetails = exports.TestReportSection = exports.TestReportChapterDetail = exports.TestReportChapterSummary = exports.TestReportChapter = exports.TestReport = void 0;
 class TestReport {
     constructor() {
         this.testStatus = 'neutral';
@@ -1545,66 +1323,6 @@ class TestFailure {
     }
 }
 exports.TestFailure = TestFailure;
-class TestCodeCoverage {
-    constructor(codeCoverage) {
-        this.lines = [];
-        const baseUrl = 'https://xcresulttool-static.netlify.app/i/';
-        this.lines.push('### Code Coverage');
-        this.lines.push('<table>');
-        this.lines.push('<tr>');
-        this.lines.push('<th width="344px">');
-        this.lines.push('<th colspan="2">Coverage');
-        this.lines.push('<th width="100px">Covered');
-        this.lines.push('<th width="100px">Executable');
-        const total = {
-            name: 'Total',
-            lineCoverage: 0,
-            coveredLines: 0,
-            executableLines: 0,
-            hasCodeCoverage: false
-        };
-        for (const target of codeCoverage.targets) {
-            if (target.name.endsWith('.xctest')) {
-                continue;
-            }
-            total.hasCodeCoverage = true;
-            {
-                const lineCoverage = target.lineCoverage * 100;
-                this.lines.push('<tr>');
-                this.lines.push(`<td>${target.name}`);
-                const image = `${lineCoverage.toFixed(0)}.svg`;
-                this.lines.push(`<td width="120px"><img src="${baseUrl}${image}"/>`);
-                this.lines.push(`<td width="104px" align="right">${lineCoverage.toFixed(2)} %`);
-                this.lines.push(`<td align="right">${target.coveredLines}`);
-                this.lines.push(`<td align="right">${target.executableLines}`);
-            }
-            total.coveredLines += target.coveredLines;
-            total.executableLines += target.executableLines;
-            for (const file of target.files) {
-                const lineCoverage = file.lineCoverage * 100;
-                this.lines.push('<tr>');
-                this.lines.push(`<td>&nbsp;&nbsp;<a href="${file.path}">${file.name}</a>`);
-                const image = `${lineCoverage.toFixed(0)}.svg`;
-                this.lines.push(`<td><img src="${baseUrl}${image}"/>`);
-                this.lines.push(`<td align="right">${lineCoverage.toFixed(2)} %`);
-                this.lines.push(`<td align="right">${file.coveredLines}`);
-                this.lines.push(`<td align="right">${file.executableLines}`);
-            }
-        }
-        if (total.hasCodeCoverage) {
-            const lineCoverage = (total.coveredLines / total.executableLines) * 100;
-            this.lines.push('<tr>');
-            this.lines.push(`<td><b>${total.name}`);
-            const image = `${lineCoverage.toFixed(0)}.svg`;
-            this.lines.push(`<td><img src="${baseUrl}${image}"/>`);
-            this.lines.push(`<td align="right"><b>${lineCoverage.toFixed(2)} %`);
-            this.lines.push(`<td align="right"><b>${total.coveredLines}`);
-            this.lines.push(`<td align="right"><b>${total.executableLines}`);
-            this.lines.push('</table>\n');
-        }
-    }
-}
-exports.TestCodeCoverage = TestCodeCoverage;
 class Annotation {
     constructor(path, start_line, end_line, annotation_level, message, title, raw_details) {
         this.path = path;

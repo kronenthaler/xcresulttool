@@ -13,9 +13,6 @@ const {stat} = promises
 async function run(): Promise<void> {
   try {
     const inputPath: string = core.getInput('path')
-    if (!inputPath) {
-      throw new Error('Failed to find the path to the input xcresult file.')
-    }
 
     const paths = inputPath.split('\n')
     const existPaths: string[] = []
@@ -36,7 +33,9 @@ async function run(): Promise<void> {
     }
 
     const formatter = new Formatter(bundlePath)
-    const report = await formatter.format()
+    const report = await formatter.format(
+      core.getInput('failuresOnly') === 'true'
+    )
 
     if (core.getInput('token')) {
       const octokit = new Octokit()
@@ -57,21 +56,23 @@ async function run(): Promise<void> {
       }
       let reportSummary = report.reportSummary
       if (reportSummary.length > charactersLimit) {
-        core.error(
+        core.warning(
           `The 'summary' will be truncated because the character limit (${charactersLimit}) exceeded.`
         )
         reportSummary = reportSummary.substring(0, charactersLimit)
       }
       let reportDetail = report.reportDetail
       if (reportDetail.length > charactersLimit) {
-        core.error(
+        core.warning(
           `The 'text' will be truncated because the character limit (${charactersLimit}) exceeded.`
         )
         reportDetail = reportDetail.substring(0, charactersLimit)
       }
 
       if (report.annotations.length > 50) {
-        core.error('Annotations that exceed the limit (50) will be truncated.')
+        core.warning(
+          'Annotations that exceed the limit (50) will be truncated.'
+        )
       }
       const annotations = report.annotations.slice(0, 50)
       await octokit.checks.create({
@@ -89,34 +90,36 @@ async function run(): Promise<void> {
         }
       })
 
-      for (const uploadBundlePath of paths) {
-        try {
-          await stat(uploadBundlePath)
-        } catch (error) {
-          continue
-        }
-
-        const artifactClient = artifact.create()
-        const artifactName = path.basename(uploadBundlePath)
-
-        const rootDirectory = uploadBundlePath
-        const options = {
-          continueOnError: false
-        }
-
-        glob(`${uploadBundlePath}/**/*`, async (error, files) => {
-          if (error) {
-            core.error(error)
+      if (core.getInput('skipUpload') !== 'true') {
+        for (const uploadBundlePath of paths) {
+          try {
+            await stat(uploadBundlePath)
+          } catch (error) {
+            continue
           }
-          if (files.length) {
-            await artifactClient.uploadArtifact(
-              artifactName,
-              files,
-              rootDirectory,
-              options
-            )
+
+          const artifactClient = artifact.create()
+          const artifactName = path.basename(uploadBundlePath)
+
+          const rootDirectory = uploadBundlePath
+          const options = {
+            continueOnError: false
           }
-        })
+
+          glob(`${uploadBundlePath}/**/*`, async (error, files) => {
+            if (error) {
+              core.error(error)
+            }
+            if (files.length) {
+              await artifactClient.uploadArtifact(
+                artifactName,
+                files,
+                rootDirectory,
+                options
+              )
+            }
+          })
+        }
       }
     }
   } catch (error) {
